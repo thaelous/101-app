@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administrador de Códigos - 101 Buenos Malos Consejos</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+    <!-- SheetJS (Para exportar a Excel) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        .font-jakarta { font-family: 'Plus Jakarta Sans', sans-serif; }
+    </style>
+
+    <!-- Firebase Modular Setup -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { 
+            getFirestore, 
+            collection, 
+            doc, 
+            setDoc, 
+            deleteDoc, 
+            getDoc, 
+            getDocs, 
+            query, 
+            orderBy, 
+            serverTimestamp, 
+            updateDoc,
+            writeBatch
+        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBzno05aK7Xb9x3ZY_k-UkXLCCgum-ZiTs",
+            authDomain: "libros-1f750.firebaseapp.com",
+            projectId: "libros-1f750",
+            storageBucket: "libros-1f750.firebasestorage.app",
+            messagingSenderId: "278349377685",
+            appId: "1:278349377685:web:34990f3b0f1f6b4bda6b9c"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        window.db = getFirestore(app);
+        window.fs = { doc, setDoc, deleteDoc, getDoc, collection, getDocs, query, orderBy, serverTimestamp, updateDoc, writeBatch };
+
+        window.firebaseReady = true;
+        window.dispatchEvent(new Event('firebase-hub-ready'));
+    </script>
+</head>
+<body class="bg-[#050b14] text-slate-100 font-jakarta min-h-screen p-4 md:p-8 pb-24">
+
+    <!-- Pantalla de Autenticación / Acceso Restringido -->
+    <div id="auth-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-[#050b14] p-4">
+        <div class="w-full max-w-md bg-[#0b1626] border border-slate-800 rounded-2xl p-8 shadow-2xl text-center space-y-6">
+            <div class="w-16 h-16 bg-purple-600/20 border border-purple-500/30 text-purple-400 rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-inner">
+                🔒
+            </div>
+            <div>
+                <h1 class="text-xl font-black text-white tracking-tight">Admin - 101BMC</h1>
+                <p class="text-xs text-slate-400 mt-1">Introduce la contraseña maestra para generar accesos.</p>
+            </div>
+            <div class="space-y-3">
+                <input type="password" id="input-password" placeholder="Contraseña de acceso" 
+                    onkeydown="if(event.key === 'Enter') verificarPassword()"
+                    class="w-full px-4 py-3 bg-[#070f1b] border border-slate-700 focus:border-purple-400 rounded-xl text-sm text-white focus:outline-none text-center tracking-widest">
+                <p id="auth-error" class="text-rose-400 text-xs hidden">⚠️ Contraseña incorrecta.</p>
+            </div>
+            <button type="button" onclick="verificarPassword()" class="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase text-xs rounded-xl transition-all shadow-lg cursor-pointer">
+                Desbloquear Panel
+            </button>
+        </div>
+    </div>
+
+    <!-- Panel Principal -->
+    <div id="main-panel" class="max-w-5xl mx-auto space-y-6 hidden">
+
+        <!-- Barra Superior -->
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span class="text-xs text-slate-400 font-mono">Conectado a Firestore (libros-1f750)</span>
+            </div>
+            <button type="button" onclick="cerrarSesion()" class="text-xs text-slate-400 hover:text-rose-400 flex items-center gap-1.5 transition-colors cursor-pointer bg-[#0b1626] px-3 py-1.5 rounded-xl border border-slate-800">
+                🔒 Cerrar Sesión
+            </button>
+        </div>
+
+        <!-- Cabecera -->
+        <header class="bg-[#0b1626] border-2 border-purple-500/40 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                    🎟️ Administrador de Códigos <span class="text-xs px-2.5 py-1 bg-purple-500/20 border border-purple-400/30 text-purple-300 rounded-full font-mono font-bold">101BMC</span>
+                </h1>
+                <p class="text-xs text-slate-300 mt-1">Generación masiva, códigos universales permanentes y exportación limpia.</p>
+            </div>
+        </header>
+
+        <!-- Métricas Rápidas -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-[#0b1626] border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <p class="text-xs uppercase tracking-wider text-slate-400 font-bold">Total Códigos</p>
+                    <p id="stat-total" class="text-2xl font-black text-white mt-1">0</p>
+                </div>
+                <div class="text-2xl">📦</div>
+            </div>
+            <div class="bg-[#0b1626] border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <p class="text-xs uppercase tracking-wider text-emerald-400 font-bold">Disponibles</p>
+                    <p id="stat-disponibles" class="text-2xl font-black text-emerald-400 mt-1">0</p>
+                </div>
+                <div class="text-2xl">🟢</div>
+            </div>
+            <div class="bg-[#0b1626] border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <p class="text-xs uppercase tracking-wider text-purple-400 font-bold">Canjeados</p>
+                    <p id="stat-usados" class="text-2xl font-black text-purple-300 mt-1">0</p>
+                </div>
+                <div class="text-2xl">🔥</div>
+            </div>
+            <div class="bg-[#0b1626] border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <p class="text-xs uppercase tracking-wider text-amber-400 font-bold">Universales</p>
+                    <p id="stat-universales" class="text-2xl font-black text-amber-300 mt-1">0</p>
+                </div>
+                <div class="text-2xl">🌟</div>
+            </div>
+        </div>
+
+        <!-- Sección de Creación: Lotes y Código Universal -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Formulario de Creación Masiva -->
+            <div class="lg:col-span-2 bg-[#0b1626] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+                <h2 class="text-sm font-bold uppercase tracking-wider text-purple-400">Generar Lote en Bloque</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Prefijo / Lote</label>
+                        <input type="text" id="input-prefix" value="BMC" placeholder="Ej. BMC" class="w-full px-4 py-2.5 bg-[#070f1b] border border-slate-700 focus:border-purple-400 rounded-xl text-sm text-white uppercase focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Cantidad (Máx. 500)</label>
+                        <input type="number" id="input-quantity" min="1" max="500" value="10" class="w-full px-4 py-2.5 bg-[#070f1b] border border-slate-700 focus:border-purple-400 rounded-xl text-sm text-white focus:outline-none">
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-3 pt-2">
+                    <button type="button" onclick="generarLoteCodigos()" id="btn-generate" class="flex-1 py-3 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase text-xs rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer">
+                        ✨ Generar Lote Atómico (Batch)
+                    </button>
+                    <button type="button" onclick="exportarExcel()" class="px-5 py-3 bg-emerald-700/80 hover:bg-emerald-600 text-white font-bold rounded-xl text-xs uppercase transition-all border border-emerald-500/40 flex items-center gap-2 cursor-pointer">
+                        📊 Exportar Excel
+                    </button>
+                </div>
+            </div>
+
+            <!-- Creación de Código Universal Permanente -->
+            <div class="bg-[#0b1626] border-2 border-amber-500/30 rounded-2xl p-6 shadow-xl flex flex-col justify-between space-y-4">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg">🌟</span>
+                        <h2 class="text-sm font-bold uppercase tracking-wider text-amber-400">Código Universal</h2>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1">Crea un código permanente que nunca se quema y permite accesos ilimitados.</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Código Personalizado</label>
+                    <input type="text" id="input-universal" value="BMC-VIP" placeholder="Ej. BMC-VIP" class="w-full px-4 py-2.5 bg-[#070f1b] border border-amber-500/40 focus:border-amber-400 rounded-xl text-sm font-mono font-bold text-amber-300 uppercase focus:outline-none">
+                </div>
+
+                <button type="button" onclick="crearCodigoUniversal()" id="btn-universal" class="w-full py-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black uppercase text-xs rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer">
+                    ⭐ Registrar Código Permanente
+                </button>
+            </div>
+
+        </div>
+
+        <!-- Tabla y Controles de Búsqueda -->
+        <div class="bg-[#0b1626] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                <h2 class="text-sm font-bold uppercase tracking-wider text-purple-400">Listado de Códigos</h2>
+                <div class="flex items-center gap-2 w-full md:w-auto">
+                    <input type="text" id="input-search" oninput="renderTabla()" placeholder="Buscar código..." class="px-3 py-1.5 bg-[#070f1b] border border-slate-700 focus:border-purple-400 rounded-xl text-xs text-white focus:outline-none w-full md:w-56">
+                    <select id="select-filter" onchange="renderTabla()" class="px-3 py-1.5 bg-[#070f1b] border border-slate-700 focus:border-purple-400 rounded-xl text-xs text-white focus:outline-none">
+                        <option value="todos">Todos</option>
+                        <option value="disponibles">Disponibles</option>
+                        <option value="canjeados">Canjeados</option>
+                        <option value="universales">Universales</option>
+                    </select>
+                    <button type="button" onclick="cargarCodigos()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs rounded-xl text-purple-300 cursor-pointer">🔄</button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto rounded-xl border border-slate-800">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-[#070f1b] text-slate-300 border-b border-slate-800">
+                            <th class="p-3 w-10 text-center">
+                                <input type="checkbox" id="check-all" onchange="toggleSelectAll(this.checked)" class="w-4 h-4 rounded border-slate-700 accent-purple-600 cursor-pointer">
+                            </th>
+                            <th class="p-3">Código</th>
+                            <th class="p-3">Tipo / Estado</th>
+                            <th class="p-3">Fecha de Creación</th>
+                            <th class="p-3 text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="codes-table-body" class="divide-y border-slate-800">
+                        <tr><td colspan="5" class="p-6 text-center text-slate-400">Cargando códigos...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Barra Flotante de Acciones en Bloque -->
+    <div id="batch-bar" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-[#0b1626]/95 border-2 border-purple-500/80 backdrop-blur-md px-6 py-3.5 rounded-2xl shadow-2xl flex items-center gap-4 hidden">
+        <span class="text-xs text-purple-300 font-bold"><span id="batch-count">0</span> seleccionados</span>
+        <div class="h-4 w-px bg-slate-700"></div>
+        <button type="button" onclick="quemarSeleccionados()" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer">
+            🔥 Quemar Seleccionados
+        </button>
+        <button type="button" onclick="borrarSeleccionados()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer">
+            🗑️ Borrar Seleccionados
+        </button>
+        <button type="button" onclick="deseleccionarTodo()" class="text-xs text-slate-400 hover:text-white ml-1 cursor-pointer">
+            ✕
+        </button>
+    </div>
+
+    <!-- Lógica del Panel -->
+    <script>
+        const MASTER_PASS = "Altair16";
+        let codigosCache = [];
+        let seleccionados = new Set();
+
+        function verificarPassword() {
+            const pass = document.getElementById('input-password').value.trim();
+            if (pass === MASTER_PASS) {
+                sessionStorage.setItem('admin_auth', 'true');
+                document.getElementById('auth-screen').classList.add('hidden');
+                document.getElementById('main-panel').classList.remove('hidden');
+                cargarCodigos();
+            } else {
+                document.getElementById('auth-error').classList.remove('hidden');
+            }
+        }
+
+        function cerrarSesion() {
+            sessionStorage.removeItem('admin_auth');
+            location.reload();
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            if (sessionStorage.getItem('admin_auth') === 'true') {
+                document.getElementById('auth-screen').classList.add('hidden');
+                document.getElementById('main-panel').classList.remove('hidden');
+                if (window.firebaseReady) {
+                    cargarCodigos();
+                } else {
+                    window.addEventListener('firebase-hub-ready', () => cargarCodigos());
+                }
+            }
+        });
+
+        async function cargarCodigos() {
+            if (!window.firebaseReady) return;
+            const tbody = document.getElementById('codes-table-body');
+            tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">Consultando Firestore...</td></tr>`;
+
+            try {
+                const q = window.fs.query(window.fs.collection(window.db, "codigos"), window.fs.orderBy("creado", "desc"));
+                const snap = await window.fs.getDocs(q);
+                codigosCache = [];
+                seleccionados.clear();
+                actualizarBarraAcciones();
+
+                snap.forEach(docSnap => {
+                    codigosCache.push({ id: docSnap.id, ...docSnap.data() });
+                });
+
+                actualizarMetricas();
+                renderTabla();
+
+            } catch (err) {
+                console.error(err);
+                tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-rose-400">Error al leer la colección 'codigos'. Revisa las reglas o permisos.</td></tr>`;
+            }
+        }
+
+        function actualizarMetricas() {
+            const total = codigosCache.length;
+            const universales = codigosCache.filter(c => c.multiuso === true || c.tipo === "universal").length;
+            const canjeados = codigosCache.filter(c => (c.canjeado === true || c.activo === false) && !c.multiuso && c.tipo !== "universal").length;
+            const disponibles = total - canjeados - universales;
+
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-disponibles').innerText = disponibles;
+            document.getElementById('stat-usados').innerText = canjeados;
+            document.getElementById('stat-universales').innerText = universales;
+        }
+
+        function renderTabla() {
+            const tbody = document.getElementById('codes-table-body');
+            const busqueda = (document.getElementById('input-search')?.value || "").toLowerCase().trim();
+            const filtro = document.getElementById('select-filter')?.value || "todos";
+
+            let filtrados = codigosCache.filter(c => {
+                const id = c.id.toLowerCase();
+                const coincideTexto = id.includes(busqueda);
+                const esUniversal = c.multiuso === true || c.tipo === "universal";
+                const estaUsado = (c.canjeado === true || c.activo === false) && !esUniversal;
+
+                if (filtro === "disponibles") return coincideTexto && !estaUsado && !esUniversal;
+                if (filtro === "canjeados") return coincideTexto && estaUsado;
+                if (filtro === "universales") return coincideTexto && esUniversal;
+                return coincideTexto;
+            });
+
+            if (filtrados.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">No se encontraron registros.</td></tr>`;
+                actualizarHeaderCheckbox(false);
+                return;
+            }
+
+            const todosSeleccionados = filtrados.length > 0 && filtrados.every(c => seleccionados.has(c.id));
+            actualizarHeaderCheckbox(todosSeleccionados);
+
+            tbody.innerHTML = filtrados.map(c => {
+                const esUniversal = c.multiuso === true || c.tipo === "universal";
+                const estaUsado = (c.canjeado === true || c.activo === false) && !esUniversal;
+                
+                let estadoBadge = "";
+                if (esUniversal) {
+                    estadoBadge = `<span class="px-2.5 py-0.5 bg-amber-950/70 text-amber-300 border border-amber-500/50 rounded-md font-bold flex items-center gap-1 w-max">🌟 Universal</span>`;
+                } else if (!estaUsado) {
+                    estadoBadge = `<span class="px-2.5 py-0.5 bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 rounded-md font-bold w-max">Disponible</span>`;
+                } else {
+                    estadoBadge = `<span class="px-2.5 py-0.5 bg-purple-950/70 text-purple-300 border border-purple-800/50 rounded-md font-bold w-max">Canjeado</span>`;
+                }
+                
+                const fecha = c.creado ? new Date(c.creado).toLocaleDateString() : '-';
+                const isChecked = seleccionados.has(c.id);
+
+                return `
+                    <tr class="hover:bg-slate-900/40 transition-colors ${isChecked ? 'bg-purple-950/20' : ''} ${estaUsado ? 'opacity-70 bg-slate-950/30' : ''}">
+                        <td class="p-3 text-center">
+                            <input type="checkbox" onchange="toggleSelectIndividual('${c.id}', this.checked)" ${isChecked ? 'checked' : ''} class="w-4 h-4 rounded border-slate-700 accent-purple-600 cursor-pointer">
+                        </td>
+                        <td class="p-3 font-mono font-bold ${esUniversal ? 'text-amber-300' : 'text-purple-300'} flex items-center gap-2">
+                            <span>${c.id}</span>
+                            <button onclick="copiarCodigo('${c.id}')" title="Copiar código" class="text-slate-500 hover:text-white transition-colors cursor-pointer">📋</button>
+                        </td>
+                        <td class="p-3">${estadoBadge}</td>
+                        <td class="p-3 text-slate-400">${fecha}</td>
+                        <td class="p-3 text-right space-x-2">
+                            ${!estaUsado && !esUniversal ? `<button onclick="quemarCodigo('${c.id}')" class="px-2 py-1 bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-500/30 rounded-lg text-xs transition-all cursor-pointer">🔥 Quemar</button>` : ''}
+                            <button onclick="borrarCodigo('${c.id}')" class="px-2 py-1 bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 rounded-lg text-xs transition-all cursor-pointer">🗑️ Borrar</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function toggleSelectIndividual(id, checked) {
+            if (checked) {
+                seleccionados.add(id);
+            } else {
+                seleccionados.delete(id);
+            }
+            actualizarBarraAcciones();
+            renderTabla();
+        }
+
+        function toggleSelectAll(checked) {
+            const busqueda = (document.getElementById('input-search')?.value || "").toLowerCase().trim();
+            const filtro = document.getElementById('select-filter')?.value || "todos";
+
+            let filtrados = codigosCache.filter(c => {
+                const id = c.id.toLowerCase();
+                const coincideTexto = id.includes(busqueda);
+                const esUniversal = c.multiuso === true || c.tipo === "universal";
+                const estaUsado = (c.canjeado === true || c.activo === false) && !esUniversal;
+                if (filtro === "disponibles") return coincideTexto && !estaUsado && !esUniversal;
+                if (filtro === "canjeados") return coincideTexto && estaUsado;
+                if (filtro === "universales") return coincideTexto && esUniversal;
+                return coincideTexto;
+            });
+
+            if (checked) {
+                filtrados.forEach(c => seleccionados.add(c.id));
+            } else {
+                filtrados.forEach(c => seleccionados.delete(c.id));
+            }
+
+            actualizarBarraAcciones();
+            renderTabla();
+        }
+
+        function deseleccionarTodo() {
+            seleccionados.clear();
+            actualizarBarraAcciones();
+            renderTabla();
+        }
+
+        function actualizarHeaderCheckbox(checked) {
+            const el = document.getElementById('check-all');
+            if (el) el.checked = checked;
+        }
+
+        function actualizarBarraAcciones() {
+            const bar = document.getElementById('batch-bar');
+            const count = document.getElementById('batch-count');
+            if (seleccionados.size > 0) {
+                count.innerText = seleccionados.size;
+                bar.classList.remove('hidden');
+            } else {
+                bar.classList.add('hidden');
+            }
+        }
+
+        async function quemarSeleccionados() {
+            if (seleccionados.size === 0) return;
+            if (!confirm(`¿Marcar como CANJEADOS los ${seleccionados.size} códigos seleccionados? Ya no podrán usarse.`)) return;
+
+            try {
+                const batch = window.fs.writeBatch(window.db);
+                const ahora = new Date().toLocaleString();
+
+                seleccionados.forEach(id => {
+                    const docRef = window.fs.doc(window.db, "codigos", id);
+                    batch.update(docRef, {
+                        activo: false,
+                        canjeado: true,
+                        fecha_canje: ahora
+                    });
+                });
+
+                await batch.commit();
+                alert(`¡${seleccionados.size} códigos marcados como canjeados con éxito!`);
+                seleccionados.clear();
+                actualizarBarraAcciones();
+                cargarCodigos();
+            } catch (err) {
+                console.error(err);
+                alert("Error al quemar los códigos seleccionados.");
+            }
+        }
+
+        async function borrarSeleccionados() {
+            if (seleccionados.size === 0) return;
+            if (!confirm(`¿Eliminar PERMANENTEMENTE los ${seleccionados.size} códigos seleccionados de Firestore? Esta acción no se puede deshacer.`)) return;
+
+            try {
+                const batch = window.fs.writeBatch(window.db);
+                seleccionados.forEach(id => {
+                    const docRef = window.fs.doc(window.db, "codigos", id);
+                    batch.delete(docRef);
+                });
+
+                await batch.commit();
+                alert(`¡${seleccionados.size} códigos eliminados de la base de datos!`);
+                seleccionados.clear();
+                actualizarBarraAcciones();
+                cargarCodigos();
+            } catch (err) {
+                console.error(err);
+                alert("Error al borrar los códigos seleccionados.");
+            }
+        }
+
+        async function crearCodigoUniversal() {
+            const codigoRaw = document.getElementById('input-universal').value.trim().toUpperCase();
+            if (!codigoRaw) {
+                alert("Por favor escribe el nombre para el código universal.");
+                return;
+            }
+
+            const btn = document.getElementById('btn-universal');
+            btn.disabled = true;
+            btn.innerText = "Registrando...";
+
+            try {
+                const docRef = window.fs.doc(window.db, "codigos", codigoRaw);
+                await window.fs.setDoc(docRef, {
+                    activo: true,
+                    canjeado: false,
+                    multiuso: true,
+                    tipo: "universal",
+                    lote: "UNIVERSAL",
+                    creado: new Date().toISOString()
+                });
+
+                alert(`¡Código Universal Permanente "${codigoRaw}" registrado con éxito!`);
+                cargarCodigos();
+            } catch (err) {
+                console.error(err);
+                alert("Error al guardar el código universal en Firestore.");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "⭐ Registrar Código Permanente";
+            }
+        }
+
+        async function generarLoteCodigos() {
+            const prefix = document.getElementById('input-prefix').value.trim().toUpperCase() || "BMC";
+            let qty = parseInt(document.getElementById('input-quantity').value) || 10;
+            if (qty > 500) qty = 500;
+
+            const btn = document.getElementById('btn-generate');
+            btn.disabled = true;
+            btn.innerText = "Escribiendo en Firestore...";
+
+            try {
+                const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+                const batch = window.fs.writeBatch(window.db);
+                const ahora = new Date().toISOString();
+
+                for (let i = 0; i < qty; i++) {
+                    let rand = "";
+                    for (let j = 0; j < 6; j++) rand += chars.charAt(Math.floor(Math.random() * chars.length));
+                    const codigo = `${prefix}-${rand}`;
+                    const docRef = window.fs.doc(window.db, "codigos", codigo);
+
+                    batch.set(docRef, {
+                        activo: true,
+                        canjeado: false,
+                        multiuso: false,
+                        tipo: "individual",
+                        lote: prefix,
+                        creado: ahora,
+                        usado_por: null,
+                        usadoPor: null
+                    });
+                }
+
+                await batch.commit();
+                alert(`¡Se generaron ${qty} códigos en un solo lote con éxito!`);
+                cargarCodigos();
+            } catch (err) {
+                console.error(err);
+                alert("Error al generar lote en Firestore.");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "✨ Generar Lote Atómico (Batch)";
+            }
+        }
+
+        function copiarCodigo(texto) {
+            navigator.clipboard.writeText(texto).then(() => {
+                alert(`Código ${texto} copiado al portapapeles.`);
+            });
+        }
+
+        async function quemarCodigo(id) {
+            if (!confirm(`¿Estás seguro de marcar el código ${id} como canjeado? Ya no podrá usarse.`)) return;
+            try {
+                await window.fs.updateDoc(window.fs.doc(window.db, "codigos", id), {
+                    activo: false,
+                    canjeado: true,
+                    fecha_canje: new Date().toLocaleString()
+                });
+                cargarCodigos();
+            } catch (err) {
+                alert("Error al actualizar el código.");
+            }
+        }
+
+        async function borrarCodigo(id) {
+            if (!confirm(`¿Eliminar permanentemente el código ${id} de la base de datos?`)) return;
+            try {
+                await window.fs.deleteDoc(window.fs.doc(window.db, "codigos", id));
+                cargarCodigos();
+            } catch (err) {
+                alert("Error al borrar el código.");
+            }
+        }
+
+        function exportarExcel() {
+            if (codigosCache.length === 0) {
+                alert("No hay datos para exportar.");
+                return;
+            }
+            const data = codigosCache.map(c => ({
+                "Código": c.id,
+                "Lote": c.lote || (c.tipo === "universal" ? "UNIVERSAL" : "-"),
+                "Fecha Creación": c.creado ? new Date(c.creado).toLocaleDateString() : "-"
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Códigos 101BMC");
+            XLSX.writeFile(wb, `Reporte_Codigos_101BMC_${new Date().toISOString().slice(0,10)}.xlsx`);
+        }
+    </script>
+</body>
+</html>

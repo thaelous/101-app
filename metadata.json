@@ -1,0 +1,6 @@
+{
+  "name": "Administrador de Códigos - 101 Buenos Malos Consejos",
+  "description": "Administrador de Códigos para 101 Buenos Malos Consejos: generación masiva, códigos universales permanentes y exportación limpia.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
