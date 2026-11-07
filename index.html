@@ -1,14 +1,30 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
     <title>Administrador de Códigos - 101 Buenos Malos Consejos</title>
     <meta name="description" content="Administrador de Códigos para 101 Buenos Malos Consejos: generación masiva, códigos universales permanentes y exportación limpia." />
     <meta property="og:title" content="Administrador de Códigos - 101 Buenos Malos Consejos" />
     <meta property="og:description" content="Administrador de Códigos para 101 Buenos Malos Consejos: generación masiva, códigos universales permanentes y exportación limpia." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- PWA Web App Manifest & Metatags -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#050b14" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="101 BMC" />
+
+    <!-- Icons -->
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/pwa-512x512.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800;900&display=swap" rel="stylesheet">
@@ -16,6 +32,16 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js').then(function(reg) {
+            console.log('PWA ServiceWorker registered with scope:', reg.scope);
+          }).catch(function(err) {
+            console.warn('PWA ServiceWorker registration error:', err);
+          });
+        });
+      }
+    </script>
   </body>
 </html>
-

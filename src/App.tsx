@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { db } from './firebase';
+import { PWAInstallBanner, PWAInstallHeaderButton } from './PWAInstallBanner';
 
 interface CodigoItem {
   id: string;
@@ -329,7 +330,7 @@ export default function App() {
         estado: 'apartado',
         fecha_apartado: new Date().toLocaleString(),
       });
-      showToast(`Código ${id} marcado como APARTADO (en espera de uso).`);
+      showToast(`Código ${id} marcado como APARTADO (en espera de cliente).`);
       await cargarCodigos();
     } catch (err) {
       console.error(err);
@@ -527,15 +528,20 @@ export default function App() {
   };
 
   return (
-    <div className="bg-[#050b14] text-slate-100 font-jakarta min-h-screen p-4 md:p-8 pb-24">
+    <div className="bg-[#050b14] text-slate-100 font-jakarta min-h-screen p-3.5 sm:p-6 md:p-8 pb-28 md:pb-24">
+      {/* PWA Install Notification Banner */}
+      <PWAInstallBanner />
+
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-5 right-5 z-50 bg-[#0b1626] border border-purple-500/80 shadow-2xl px-5 py-3 rounded-xl text-xs font-bold text-white flex items-center gap-3 animate-fade-in">
-          <span>🔔</span>
-          <span>{toastMessage}</span>
+        <div className="fixed top-4 left-4 right-4 sm:left-auto sm:right-5 z-50 bg-[#0b1626]/95 border border-purple-500/80 shadow-2xl px-4 py-3 rounded-xl text-xs font-bold text-white flex items-center justify-between gap-3 animate-fade-in backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            <span>🔔</span>
+            <span className="leading-snug">{toastMessage}</span>
+          </div>
           <button
             onClick={() => setToastMessage(null)}
-            className="text-slate-400 hover:text-white cursor-pointer ml-2"
+            className="text-slate-400 hover:text-white cursor-pointer p-1"
           >
             ✕
           </button>
@@ -544,17 +550,17 @@ export default function App() {
 
       {/* Confirmation Modal */}
       {confirmDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
           <div className="w-full max-w-md bg-[#0b1626] border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
             <div className="text-xl font-bold text-white flex items-center gap-2">
               <span>⚠️</span> Confirmación
             </div>
             <p className="text-sm text-slate-300 leading-relaxed">{confirmDialog.message}</p>
-            <div className="flex justify-end gap-3 pt-3">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2.5 pt-3">
               <button
                 type="button"
                 onClick={() => setConfirmDialog(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                className="w-full sm:w-auto px-5 py-3 sm:py-2 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-300 rounded-xl text-xs font-bold cursor-pointer transition-colors"
               >
                 Cancelar
               </button>
@@ -565,7 +571,7 @@ export default function App() {
                   setConfirmDialog(null);
                   fn();
                 }}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-lg"
+                className="w-full sm:w-auto px-5 py-3 sm:py-2 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-lg"
               >
                 Confirmar
               </button>
@@ -577,7 +583,7 @@ export default function App() {
       {/* Pantalla de Autenticación / Acceso Restringido */}
       {!isAuthenticated && (
         <div id="auth-screen" className="fixed inset-0 z-50 flex items-center justify-center bg-[#050b14] p-4">
-          <div className="w-full max-w-md bg-[#0b1626] border border-slate-800 rounded-2xl p-8 shadow-2xl text-center space-y-6">
+          <div className="w-full max-w-md bg-[#0b1626] border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl text-center space-y-6">
             <div className="w-16 h-16 bg-purple-600/20 border border-purple-500/30 text-purple-400 rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-inner">
               🔒
             </div>
@@ -611,7 +617,7 @@ export default function App() {
             <button
               type="button"
               onClick={verificarPassword}
-              className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase text-xs rounded-xl transition-all shadow-lg cursor-pointer"
+              className="w-full py-3.5 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white font-black uppercase text-xs rounded-xl transition-all shadow-lg cursor-pointer"
             >
               Desbloquear Panel
             </button>
@@ -621,27 +627,32 @@ export default function App() {
 
       {/* Panel Principal */}
       {isAuthenticated && (
-        <div id="main-panel" className="max-w-5xl mx-auto space-y-6">
+        <div id="main-panel" className="max-w-5xl mx-auto space-y-5 sm:space-y-6">
           {/* Barra Superior */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span className="text-xs text-slate-400 font-mono">Conectado a Firestore (libros-1f750)</span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+              <span className="text-xs text-slate-400 font-mono truncate">
+                Conectado a Firestore (libros-1f750)
+              </span>
             </div>
-            <button
-              type="button"
-              onClick={cerrarSesion}
-              className="text-xs text-slate-400 hover:text-rose-400 flex items-center gap-1.5 transition-colors cursor-pointer bg-[#0b1626] px-3 py-1.5 rounded-xl border border-slate-800"
-            >
-              🔒 Cerrar Sesión
-            </button>
+            <div className="flex items-center gap-2">
+              <PWAInstallHeaderButton />
+              <button
+                type="button"
+                onClick={cerrarSesion}
+                className="text-xs text-slate-400 hover:text-rose-400 flex items-center gap-1.5 transition-colors cursor-pointer bg-[#0b1626] px-3 py-1.5 rounded-xl border border-slate-800 shrink-0"
+              >
+                🔒 <span className="hidden xs:inline">Cerrar Sesión</span>
+              </button>
+            </div>
           </div>
 
           {/* Cabecera */}
-          <header className="bg-[#0b1626] border-2 border-purple-500/40 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4">
+          <header className="bg-[#0b1626] border-2 border-purple-500/40 rounded-2xl p-5 sm:p-6 shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
             <div>
-              <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
-                🎟️ Administrador de Códigos{' '}
+              <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2 flex-wrap">
+                <span>🎟️ Administrador de Códigos</span>
                 <span className="text-xs px-2.5 py-1 bg-purple-500/20 border border-purple-400/30 text-purple-300 rounded-full font-mono font-bold">
                   101BMC
                 </span>
@@ -652,64 +663,64 @@ export default function App() {
             </div>
           </header>
 
-          {/* Métricas Rápidas (5 cards incluyendo "Apartados") */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
-            <div className="bg-[#0b1626] border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
+          {/* Métricas Rápidas (Grid responsivo adaptado a móvil) */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 sm:gap-4">
+            <div className="bg-[#0b1626] border border-slate-800 rounded-2xl p-3 sm:p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Total</p>
-                <p id="stat-total" className="text-2xl font-black text-white mt-1">
+                <p className="text-[11px] sm:text-xs uppercase tracking-wider text-slate-400 font-bold">Total</p>
+                <p id="stat-total" className="text-xl sm:text-2xl font-black text-white mt-0.5">
                   {metrics.total}
                 </p>
               </div>
-              <div className="text-2xl">📦</div>
+              <div className="text-xl sm:text-2xl">📦</div>
             </div>
-            <div className="bg-[#0b1626] border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
+            <div className="bg-[#0b1626] border border-slate-800 rounded-2xl p-3 sm:p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wider text-emerald-400 font-bold">Disponibles</p>
-                <p id="stat-disponibles" className="text-2xl font-black text-emerald-400 mt-1">
+                <p className="text-[11px] sm:text-xs uppercase tracking-wider text-emerald-400 font-bold">Disponibles</p>
+                <p id="stat-disponibles" className="text-xl sm:text-2xl font-black text-emerald-400 mt-0.5">
                   {metrics.disponibles}
                 </p>
               </div>
-              <div className="text-2xl">🟢</div>
+              <div className="text-xl sm:text-2xl">🟢</div>
             </div>
-            <div className="bg-[#0b1626] border border-orange-500/30 rounded-2xl p-4 flex items-center justify-between bg-orange-950/10">
+            <div className="bg-[#0b1626] border border-orange-500/30 rounded-2xl p-3 sm:p-4 flex items-center justify-between bg-orange-950/10">
               <div>
-                <p className="text-xs uppercase tracking-wider text-orange-400 font-bold">Apartados</p>
-                <p id="stat-apartados" className="text-2xl font-black text-orange-300 mt-1">
+                <p className="text-[11px] sm:text-xs uppercase tracking-wider text-orange-400 font-bold">Apartados</p>
+                <p id="stat-apartados" className="text-xl sm:text-2xl font-black text-orange-300 mt-0.5">
                   {metrics.apartados}
                 </p>
               </div>
-              <div className="text-2xl">⏳</div>
+              <div className="text-xl sm:text-2xl">⏳</div>
             </div>
-            <div className="bg-[#0b1626] border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
+            <div className="bg-[#0b1626] border border-slate-800 rounded-2xl p-3 sm:p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wider text-purple-400 font-bold">Canjeados</p>
-                <p id="stat-usados" className="text-2xl font-black text-purple-300 mt-1">
+                <p className="text-[11px] sm:text-xs uppercase tracking-wider text-purple-400 font-bold">Canjeados</p>
+                <p id="stat-usados" className="text-xl sm:text-2xl font-black text-purple-300 mt-0.5">
                   {metrics.canjeados}
                 </p>
               </div>
-              <div className="text-2xl">🔥</div>
+              <div className="text-xl sm:text-2xl">🔥</div>
             </div>
-            <div className="bg-[#0b1626] border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
+            <div className="col-span-2 sm:col-span-1 bg-[#0b1626] border border-slate-800 rounded-2xl p-3 sm:p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wider text-amber-400 font-bold">Universales</p>
-                <p id="stat-universales" className="text-2xl font-black text-amber-300 mt-1">
+                <p className="text-[11px] sm:text-xs uppercase tracking-wider text-amber-400 font-bold">Universales</p>
+                <p id="stat-universales" className="text-xl sm:text-2xl font-black text-amber-300 mt-0.5">
                   {metrics.universales}
                 </p>
               </div>
-              <div className="text-2xl">🌟</div>
+              <div className="text-xl sm:text-2xl">🌟</div>
             </div>
           </div>
 
           {/* Sección de Creación: Lotes y Código Universal */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6">
             {/* Formulario de Creación Masiva */}
-            <div className="lg:col-span-2 bg-[#0b1626] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+            <div className="lg:col-span-2 bg-[#0b1626] border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl space-y-4">
               <h2 className="text-sm font-bold uppercase tracking-wider text-purple-400">
                 Generar Lote en Bloque
               </h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1">Prefijo / Lote</label>
                   <input
@@ -718,7 +729,7 @@ export default function App() {
                     value={prefix}
                     onChange={(e) => setPrefix(e.target.value.toUpperCase())}
                     placeholder="Ej. BMC"
-                    className="w-full px-4 py-2.5 bg-[#070f1b] border border-slate-700 focus:border-purple-400 rounded-xl text-sm text-white uppercase focus:outline-none"
+                    className="w-full px-4 py-2.5 sm:py-3 bg-[#070f1b] border border-slate-700 focus:border-purple-400 rounded-xl text-sm text-white uppercase focus:outline-none"
                   />
                 </div>
                 <div>
@@ -730,25 +741,25 @@ export default function App() {
                     max={500}
                     value={quantity}
                     onChange={(e) => setQuantity(Math.min(500, Math.max(1, parseInt(e.target.value) || 1)))}
-                    className="w-full px-4 py-2.5 bg-[#070f1b] border border-slate-700 focus:border-purple-400 rounded-xl text-sm text-white focus:outline-none"
+                    className="w-full px-4 py-2.5 sm:py-3 bg-[#070f1b] border border-slate-700 focus:border-purple-400 rounded-xl text-sm text-white focus:outline-none"
                   />
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-3 pt-2">
+              <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 pt-1">
                 <button
                   type="button"
                   onClick={generarLoteCodigos}
                   disabled={isGenerating}
                   id="btn-generate"
-                  className="flex-1 py-3 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-black uppercase text-xs rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                  className="flex-1 min-h-[46px] py-3 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 disabled:opacity-50 text-white font-black uppercase text-xs rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isGenerating ? 'Escribiendo en Firestore...' : '✨ Generar Lote Atómico (Batch)'}
                 </button>
                 <button
                   type="button"
                   onClick={exportarExcel}
-                  className="px-5 py-3 bg-emerald-700/80 hover:bg-emerald-600 text-white font-bold rounded-xl text-xs uppercase transition-all border border-emerald-500/40 flex items-center gap-2 cursor-pointer"
+                  className="min-h-[46px] px-5 py-3 bg-emerald-700/80 hover:bg-emerald-600 active:bg-emerald-800 text-white font-bold rounded-xl text-xs uppercase transition-all border border-emerald-500/40 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   📊 Exportar Excel
                 </button>
@@ -756,7 +767,7 @@ export default function App() {
             </div>
 
             {/* Creación de Código Universal Permanente */}
-            <div className="bg-[#0b1626] border-2 border-amber-500/30 rounded-2xl p-6 shadow-xl flex flex-col justify-between space-y-4">
+            <div className="bg-[#0b1626] border-2 border-amber-500/30 rounded-2xl p-5 sm:p-6 shadow-xl flex flex-col justify-between space-y-4">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-lg">🌟</span>
@@ -777,7 +788,7 @@ export default function App() {
                   value={universalCode}
                   onChange={(e) => setUniversalCode(e.target.value.toUpperCase())}
                   placeholder="Ej. BMC-VIP"
-                  className="w-full px-4 py-2.5 bg-[#070f1b] border border-amber-500/40 focus:border-amber-400 rounded-xl text-sm font-mono font-bold text-amber-300 uppercase focus:outline-none"
+                  className="w-full px-4 py-2.5 sm:py-3 bg-[#070f1b] border border-amber-500/40 focus:border-amber-400 rounded-xl text-sm font-mono font-bold text-amber-300 uppercase focus:outline-none"
                 />
               </div>
 
@@ -786,7 +797,7 @@ export default function App() {
                 onClick={crearCodigoUniversal}
                 disabled={isRegisteringUniversal}
                 id="btn-universal"
-                className="w-full py-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:opacity-50 text-slate-950 font-black uppercase text-xs rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full min-h-[46px] py-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 active:from-amber-700 active:to-amber-600 disabled:opacity-50 text-slate-950 font-black uppercase text-xs rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isRegisteringUniversal ? 'Registrando...' : '⭐ Registrar Código Permanente'}
               </button>
@@ -794,52 +805,67 @@ export default function App() {
           </div>
 
           {/* Tabla y Controles de Búsqueda y Quemado en Combo */}
-          <div className="bg-[#0b1626] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2">
-                  <span>Listado de Códigos</span>
-                  <span className="text-xs normal-case text-slate-400 font-normal">
-                    ({filteredCodes.length} mostrados)
+          <div className="bg-[#0b1626] border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl space-y-4">
+            <div className="flex flex-col gap-3.5">
+              {/* Barra superior de la sección de códigos: Título y Botón Quemar en Combo */}
+              <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+                <div className="flex items-center justify-between sm:justify-start gap-2">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2">
+                    <span>Listado de Códigos</span>
+                  </h2>
+                  <span className="text-xs text-slate-400 font-mono bg-[#070f1b] px-2.5 py-1 rounded-lg border border-slate-800">
+                    {filteredCodes.length} {filteredCodes.length === 1 ? 'registro' : 'registros'}
                   </span>
-                </h2>
+                </div>
 
                 {/* Botón de Acción Masiva: Quemar Códigos Filtrados por Prefijo / Filtro */}
                 <button
                   type="button"
                   onClick={quemarFiltradosEnCombo}
                   disabled={activeFilteredCodes.length === 0}
-                  className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs uppercase transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 active:from-amber-700 active:to-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold rounded-xl text-xs uppercase tracking-wide transition-all shadow-md flex items-center justify-center gap-2.5 cursor-pointer"
                   title="Quema todos los códigos activos que coinciden con los filtros actuales"
                 >
-                  <span>🔥 Quemar códigos filtrados</span>
-                  <span className="bg-black/30 px-2 py-0.5 rounded-full text-[10px] font-mono">
+                  <span className="text-sm">🔥</span>
+                  <span>Quemar códigos filtrados</span>
+                  <span className="bg-black/35 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold">
                     {activeFilteredCodes.length}
                   </span>
                 </button>
               </div>
 
               {/* Filtros: Búsqueda, Filtro por Prefijo, Estado y Recarga */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
                 <div>
                   <input
                     type="text"
                     id="input-search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Buscar código..."
-                    className="w-full px-3 py-2 bg-[#070f1b] border border-slate-700 focus:border-purple-400 rounded-xl text-xs text-white focus:outline-none"
+                    placeholder="🔍 Buscar código..."
+                    className="w-full px-3.5 py-2.5 bg-[#070f1b] border border-slate-700 focus:border-purple-400 rounded-xl text-xs sm:text-sm text-white focus:outline-none"
                   />
                 </div>
-                <div>
+                <div className="relative">
                   <input
                     type="text"
                     id="input-prefix-filter"
                     value={prefixFilter}
                     onChange={(e) => setPrefixFilter(e.target.value.toUpperCase())}
-                    placeholder="Filtro por prefijo (ej. BMC)..."
-                    className="w-full px-3 py-2 bg-[#070f1b] border border-amber-500/40 focus:border-amber-400 rounded-xl text-xs text-amber-300 uppercase font-mono focus:outline-none"
+                    autoCapitalize="characters"
+                    autoCorrect="off"
+                    placeholder="🏷️ Filtro por prefijo (ej. BMC)..."
+                    className="w-full px-3.5 py-2.5 bg-[#070f1b] border border-amber-500/40 focus:border-amber-400 rounded-xl text-xs sm:text-sm text-amber-300 uppercase font-mono focus:outline-none"
                   />
+                  {prefixFilter && (
+                    <button
+                      type="button"
+                      onClick={() => setPrefixFilter('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs px-1.5 py-0.5 rounded bg-slate-800"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
                 <div>
                   <select
@@ -850,7 +876,7 @@ export default function App() {
                         e.target.value as 'todos' | 'disponibles' | 'apartados' | 'canjeados' | 'universales'
                       )
                     }
-                    className="w-full px-3 py-2 bg-[#070f1b] border border-slate-700 focus:border-purple-400 rounded-xl text-xs text-white focus:outline-none"
+                    className="w-full px-3.5 py-2.5 bg-[#070f1b] border border-slate-700 focus:border-purple-400 rounded-xl text-xs sm:text-sm text-white focus:outline-none"
                   >
                     <option value="todos">Todos los estados</option>
                     <option value="disponibles">🟢 Disponibles</option>
@@ -860,21 +886,11 @@ export default function App() {
                   </select>
                 </div>
                 <div className="flex gap-2">
-                  {prefixFilter && (
-                    <button
-                      type="button"
-                      onClick={() => setPrefixFilter('')}
-                      className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs rounded-xl text-slate-300 cursor-pointer"
-                      title="Limpiar filtro de prefijo"
-                    >
-                      Limpiar
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={cargarCodigos}
                     title="Recargar códigos desde Firestore"
-                    className="flex-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs rounded-xl text-purple-300 font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="w-full min-h-[40px] px-4 py-2.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-900 text-xs sm:text-sm rounded-xl text-purple-300 font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors"
                   >
                     <span>🔄</span>
                     <span>Recargar</span>
@@ -883,7 +899,199 @@ export default function App() {
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-slate-800">
+            {/* Barra de selección móvil (Visible sólo en pantallas pequeñas) */}
+            <div className="block md:hidden pt-2 border-t border-slate-800/80">
+              <div className="flex items-center justify-between bg-[#070f1b] px-3.5 py-2.5 rounded-xl border border-slate-800">
+                <label className="flex items-center gap-2.5 cursor-pointer text-xs font-bold text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={areAllFilteredSelected}
+                    onChange={(e) => toggleSelectAll(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-700 accent-purple-600 cursor-pointer"
+                  />
+                  <span>Seleccionar todos ({filteredCodes.length})</span>
+                </label>
+                {selectedIds.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={deseleccionarTodo}
+                    className="text-[11px] text-purple-400 hover:text-purple-300 font-bold"
+                  >
+                    Limpiar selección
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* VISTA MÓVIL: Tarjetas Verticales Individuales (Mobile-First) */}
+            <div className="block md:hidden space-y-3 pt-1">
+              {isLoading ? (
+                <div className="p-8 text-center text-slate-400 bg-[#070f1b] rounded-2xl border border-slate-800">
+                  <div className="animate-spin text-2xl mb-2">🔄</div>
+                  <p className="text-xs">Consultando Firestore...</p>
+                </div>
+              ) : fetchError ? (
+                <div className="p-6 text-center text-rose-400 bg-[#070f1b] rounded-2xl border border-rose-900/40 text-xs">
+                  {fetchError}
+                </div>
+              ) : filteredCodes.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 bg-[#070f1b] rounded-2xl border border-slate-800 text-xs">
+                  No se encontraron registros con los filtros actuales.
+                </div>
+              ) : (
+                filteredCodes.map((c) => {
+                  const esUniversal = c.multiuso === true || c.tipo === 'universal';
+                  const estaUsado = (c.canjeado === true || c.activo === false) && !esUniversal;
+                  const esApartado =
+                    !estaUsado && !esUniversal && (c.apartado === true || c.estado === 'apartado');
+                  const fecha = c.creado ? new Date(c.creado).toLocaleDateString() : '-';
+                  const isChecked = selectedIds.has(c.id);
+
+                  return (
+                    <div
+                      key={`card-${c.id}`}
+                      className={`p-4 rounded-2xl border transition-all ${
+                        isChecked
+                          ? 'border-purple-500/80 bg-purple-950/25 shadow-lg shadow-purple-950/20'
+                          : esApartado
+                          ? 'border-orange-500/40 bg-orange-950/15'
+                          : estaUsado
+                          ? 'border-slate-800/80 bg-[#070f1b]/70 opacity-80'
+                          : 'border-slate-800 bg-[#070f1b]'
+                      }`}
+                    >
+                      {/* Cabecera de la tarjeta: Checkbox, Código y Estado */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => toggleSelectIndividual(c.id, e.target.checked)}
+                            className="w-5 h-5 rounded border-slate-700 accent-purple-600 cursor-pointer shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <span
+                              className={`text-base font-mono font-black tracking-wide block truncate ${
+                                esUniversal
+                                  ? 'text-amber-300'
+                                  : esApartado
+                                  ? 'text-orange-300'
+                                  : 'text-purple-300'
+                              }`}
+                            >
+                              {c.id}
+                            </span>
+                            <span className="text-[11px] text-slate-400 font-mono">
+                              Lote: {c.lote || (esUniversal ? 'UNIVERSAL' : '-')}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Botón copiar con área táctil cómoda */}
+                        <button
+                          type="button"
+                          onClick={() => copiarCodigo(c.id)}
+                          title="Copiar código"
+                          className="shrink-0 p-2.5 bg-slate-800/80 active:bg-slate-700 text-slate-300 rounded-xl text-sm transition-all"
+                        >
+                          📋
+                        </button>
+                      </div>
+
+                      {/* Información de Estado y Fechas */}
+                      <div className="mt-3 pt-2.5 border-t border-slate-800/60 flex items-center justify-between flex-wrap gap-2 text-xs">
+                        <div>
+                          {esUniversal ? (
+                            <span className="px-2.5 py-1 bg-amber-950/70 text-amber-300 border border-amber-500/50 rounded-lg font-bold flex items-center gap-1">
+                              🌟 Universal
+                            </span>
+                          ) : estaUsado ? (
+                            <span className="px-2.5 py-1 bg-purple-950/70 text-purple-300 border border-purple-800/50 rounded-lg font-bold">
+                              🔥 Canjeado
+                            </span>
+                          ) : esApartado ? (
+                            <span className="px-2.5 py-1 bg-orange-950/70 text-orange-400 border border-orange-500/50 rounded-lg font-bold flex items-center gap-1">
+                              ⏳ Apartado
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 rounded-lg font-bold">
+                              🟢 Disponible
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-[11px] text-slate-400">
+                          <span>📅 {fecha}</span>
+                          {c.fecha_canje && (
+                            <span className="block text-[10px] text-slate-500">
+                              Canje: {c.fecha_canje}
+                            </span>
+                          )}
+                          {c.fecha_apartado && !c.fecha_canje && (
+                            <span className="block text-[10px] text-orange-400/80">
+                              Reserva: {c.fecha_apartado}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Botones de Acción Táctil Optimizados para Móvil */}
+                      <div className="mt-3.5 pt-3 border-t border-slate-800/80 flex items-center gap-2">
+                        {/* Botón Apartar / Liberar */}
+                        {!estaUsado && !esUniversal && !esApartado && (
+                          <button
+                            type="button"
+                            onClick={() => apartarCodigo(c.id)}
+                            className="flex-1 min-h-[42px] py-2.5 px-3 bg-orange-600/20 active:bg-orange-600 text-orange-400 active:text-white border border-orange-500/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                          >
+                            <span>⏳</span>
+                            <span>Apartar</span>
+                          </button>
+                        )}
+
+                        {!estaUsado && !esUniversal && esApartado && (
+                          <button
+                            type="button"
+                            onClick={() => liberarCodigo(c.id)}
+                            className="flex-1 min-h-[42px] py-2.5 px-3 bg-slate-800 active:bg-slate-700 text-slate-300 active:text-white border border-slate-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                          >
+                            <span>↩️</span>
+                            <span>Liberar</span>
+                          </button>
+                        )}
+
+                        {/* Botón Quemar */}
+                        {!estaUsado && !esUniversal && (
+                          <button
+                            type="button"
+                            onClick={() => quemarCodigo(c.id)}
+                            className="flex-1 min-h-[42px] py-2.5 px-3 bg-amber-600/20 active:bg-amber-600 text-amber-400 active:text-white border border-amber-500/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                          >
+                            <span>🔥</span>
+                            <span>Quemar</span>
+                          </button>
+                        )}
+
+                        {/* Botón Borrar */}
+                        <button
+                          type="button"
+                          onClick={() => borrarCodigo(c.id)}
+                          className={`${
+                            estaUsado || esUniversal ? 'w-full' : 'shrink-0 px-4'
+                          } min-h-[42px] py-2.5 bg-rose-600/20 active:bg-rose-600 text-rose-400 active:text-white border border-rose-500/40 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm`}
+                        >
+                          <span>🗑️</span>
+                          <span>Borrar</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* VISTA ESCRITORIO: Tabla Horizontal (md: y superiores) */}
+            <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-800">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-[#070f1b] text-slate-300 border-b border-slate-800">
@@ -1043,41 +1251,62 @@ export default function App() {
         </div>
       )}
 
-      {/* Barra Flotante de Acciones en Bloque */}
+      {/* Barra Flotante de Acciones en Bloque (Adaptada a pantallas móviles) */}
       {selectedIds.size > 0 && isAuthenticated && (
         <div
           id="batch-bar"
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-[#0b1626]/95 border-2 border-purple-500/80 backdrop-blur-md px-6 py-3.5 rounded-2xl shadow-2xl flex flex-wrap items-center justify-center gap-3"
+          className="fixed bottom-4 left-3 right-3 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-40 bg-[#0b1626]/95 border-2 border-purple-500/80 backdrop-blur-md p-3 sm:px-6 sm:py-3 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4 max-w-lg sm:max-w-none mx-auto"
         >
-          <span className="text-xs text-purple-300 font-bold">
-            <span id="batch-count">{selectedIds.size}</span> seleccionados
-          </span>
+          <div className="flex items-center justify-between sm:justify-start gap-3">
+            <span className="text-xs text-purple-300 font-bold">
+              <span id="batch-count" className="text-white font-mono bg-purple-900/50 px-2 py-0.5 rounded-lg border border-purple-500/40 mr-1">
+                {selectedIds.size}
+              </span>{' '}
+              seleccionados
+            </span>
+            <button
+              type="button"
+              onClick={deseleccionarTodo}
+              className="text-xs text-slate-400 hover:text-white p-1 cursor-pointer sm:hidden"
+              title="Deseleccionar todos"
+            >
+              ✕ Cerrar
+            </button>
+          </div>
+
           <div className="h-4 w-px bg-slate-700 hidden sm:block"></div>
-          <button
-            type="button"
-            onClick={apartarSeleccionados}
-            className="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
-          >
-            ⏳ Apartar Seleccionados
-          </button>
-          <button
-            type="button"
-            onClick={quemarSeleccionados}
-            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
-          >
-            🔥 Quemar Seleccionados
-          </button>
-          <button
-            type="button"
-            onClick={borrarSeleccionados}
-            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
-          >
-            🗑️ Borrar Seleccionados
-          </button>
+
+          <div className="grid grid-cols-3 sm:flex items-center gap-2">
+            <button
+              type="button"
+              onClick={apartarSeleccionados}
+              className="min-h-[38px] px-2.5 py-1.5 bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1 cursor-pointer"
+            >
+              <span>⏳</span>
+              <span className="hidden xs:inline">Apartar</span>
+            </button>
+            <button
+              type="button"
+              onClick={quemarSeleccionados}
+              className="min-h-[38px] px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1 cursor-pointer"
+            >
+              <span>🔥</span>
+              <span className="hidden xs:inline">Quemar</span>
+            </button>
+            <button
+              type="button"
+              onClick={borrarSeleccionados}
+              className="min-h-[38px] px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1 cursor-pointer"
+            >
+              <span>🗑️</span>
+              <span className="hidden xs:inline">Borrar</span>
+            </button>
+          </div>
+
           <button
             type="button"
             onClick={deseleccionarTodo}
-            className="text-xs text-slate-400 hover:text-white ml-1 cursor-pointer"
+            className="text-xs text-slate-400 hover:text-white ml-1 cursor-pointer hidden sm:block"
             title="Deseleccionar todos"
           >
             ✕
