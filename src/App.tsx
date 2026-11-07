@@ -17,11 +17,14 @@ interface CodigoItem {
   id: string;
   activo?: boolean;
   canjeado?: boolean;
+  apartado?: boolean;
+  estado?: string;
   multiuso?: boolean;
   tipo?: string;
   lote?: string;
   creado?: string;
   fecha_canje?: string;
+  fecha_apartado?: string;
   usado_por?: string | null;
   usadoPor?: string | null;
 }
@@ -51,9 +54,10 @@ export default function App() {
   const [universalCode, setUniversalCode] = useState('BMC-VIP');
   const [isRegisteringUniversal, setIsRegisteringUniversal] = useState(false);
 
-  // Filter & Search
+  // Filter & Search states
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'todos' | 'disponibles' | 'canjeados' | 'universales'>('todos');
+  const [prefixFilter, setPrefixFilter] = useState('');
+  const [filter, setFilter] = useState<'todos' | 'disponibles' | 'apartados' | 'canjeados' | 'universales'>('todos');
 
   // Custom UI Dialog / Toast (to avoid window.alert / window.confirm in iframe)
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -120,25 +124,56 @@ export default function App() {
     const canjeados = codes.filter(
       (c) => (c.canjeado === true || c.activo === false) && !c.multiuso && c.tipo !== 'universal'
     ).length;
-    const disponibles = total - canjeados - universales;
-    return { total, disponibles, canjeados, universales };
+    const apartados = codes.filter(
+      (c) =>
+        (c.apartado === true || c.estado === 'apartado') &&
+        !(c.canjeado === true || c.activo === false) &&
+        !c.multiuso &&
+        c.tipo !== 'universal'
+    ).length;
+    const disponibles = total - canjeados - universales - apartados;
+    return { total, disponibles, apartados, canjeados, universales };
   }, [codes]);
 
   // Filtered list
   const filteredCodes = useMemo(() => {
     const q = search.toLowerCase().trim();
+    const pfx = prefixFilter.toUpperCase().trim();
+
     return codes.filter((c) => {
-      const id = c.id.toLowerCase();
-      const coincideTexto = id.includes(q);
+      const idUpper = c.id.toUpperCase();
+      const idLower = c.id.toLowerCase();
+      const loteUpper = (c.lote || '').toUpperCase();
+
+      // Check prefix filter
+      const coincidePrefijo = !pfx || idUpper.startsWith(pfx) || loteUpper === pfx || idUpper.includes(pfx);
+
+      // Check text search
+      const coincideTexto = !q || idLower.includes(q);
+
+      if (!coincidePrefijo || !coincideTexto) return false;
+
       const esUniversal = c.multiuso === true || c.tipo === 'universal';
       const estaUsado = (c.canjeado === true || c.activo === false) && !esUniversal;
+      const esApartado = !estaUsado && !esUniversal && (c.apartado === true || c.estado === 'apartado');
+      const esDisponible = !estaUsado && !esUniversal && !esApartado;
 
-      if (filter === 'disponibles') return coincideTexto && !estaUsado && !esUniversal;
-      if (filter === 'canjeados') return coincideTexto && estaUsado;
-      if (filter === 'universales') return coincideTexto && esUniversal;
-      return coincideTexto;
+      if (filter === 'disponibles') return esDisponible;
+      if (filter === 'apartados') return esApartado;
+      if (filter === 'canjeados') return estaUsado;
+      if (filter === 'universales') return esUniversal;
+      return true;
     });
-  }, [codes, search, filter]);
+  }, [codes, search, prefixFilter, filter]);
+
+  // Active codes matching current filter (can be burned in combo)
+  const activeFilteredCodes = useMemo(() => {
+    return filteredCodes.filter((c) => {
+      const esUniversal = c.multiuso === true || c.tipo === 'universal';
+      const estaUsado = (c.canjeado === true || c.activo === false) && !esUniversal;
+      return !estaUsado && !esUniversal;
+    });
+  }, [filteredCodes]);
 
   const areAllFilteredSelected = useMemo(() => {
     if (filteredCodes.length === 0) return false;
@@ -169,6 +204,36 @@ export default function App() {
     setSelectedIds(new Set());
   };
 
+  // Helper for batch updates chunked (Firestore limit is 500 per batch)
+  const batchUpdateInChunks = async (
+    ids: string[],
+    data: Record<string, unknown>
+  ) => {
+    const CHUNK_SIZE = 450;
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+      const chunk = ids.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      for (const id of chunk) {
+        const docRef = doc(db, 'codigos', id);
+        batch.update(docRef, data);
+      }
+      await batch.commit();
+    }
+  };
+
+  // Helper for batch deletes chunked
+  const batchDeleteInChunks = async (ids: string[]) => {
+    const CHUNK_SIZE = 450;
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+      const chunk = ids.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      for (const id of chunk) {
+        batch.delete(doc(db, 'codigos', id));
+      }
+      await batch.commit();
+    }
+  };
+
   // Actions
   const generarLoteCodigos = async () => {
     const pfx = prefix.trim().toUpperCase() || 'BMC';
@@ -193,6 +258,8 @@ export default function App() {
         batch.set(docRef, {
           activo: true,
           canjeado: false,
+          apartado: false,
+          estado: 'disponible',
           multiuso: false,
           tipo: 'individual',
           lote: pfx,
@@ -226,6 +293,8 @@ export default function App() {
       await setDoc(docRef, {
         activo: true,
         canjeado: false,
+        apartado: false,
+        estado: 'disponible',
         multiuso: true,
         tipo: 'universal',
         lote: 'UNIVERSAL',
@@ -252,14 +321,47 @@ export default function App() {
     }
   };
 
+  // State: Apartar
+  const apartarCodigo = async (id: string) => {
+    try {
+      await updateDoc(doc(db, 'codigos', id), {
+        apartado: true,
+        estado: 'apartado',
+        fecha_apartado: new Date().toLocaleString(),
+      });
+      showToast(`Código ${id} marcado como APARTADO (en espera de uso).`);
+      await cargarCodigos();
+    } catch (err) {
+      console.error(err);
+      showToast('Error al apartar el código.');
+    }
+  };
+
+  // State: Liberar (quitar de apartado y volver a disponible)
+  const liberarCodigo = async (id: string) => {
+    try {
+      await updateDoc(doc(db, 'codigos', id), {
+        apartado: false,
+        estado: 'disponible',
+      });
+      showToast(`Código ${id} liberado y disponible nuevamente.`);
+      await cargarCodigos();
+    } catch (err) {
+      console.error(err);
+      showToast('Error al liberar el código.');
+    }
+  };
+
   const quemarCodigo = (id: string) => {
     setConfirmDialog({
-      message: `¿Estás seguro de marcar el código ${id} como canjeado? Ya no podrá usarse.`,
+      message: `¿Estás seguro de marcar el código ${id} como canjeado/quemado? Ya no podrá usarse.`,
       onConfirm: async () => {
         try {
           await updateDoc(doc(db, 'codigos', id), {
             activo: false,
             canjeado: true,
+            apartado: false,
+            estado: 'canjeado',
             fecha_canje: new Date().toLocaleString(),
           });
           showToast(`Código ${id} marcado como canjeado.`);
@@ -288,26 +390,85 @@ export default function App() {
     });
   };
 
-  const quemarSeleccionados = () => {
-    if (selectedIds.size === 0) return;
+  // Quemar en combo por prefijo / filtro actual
+  const quemarFiltradosEnCombo = () => {
+    const count = activeFilteredCodes.length;
+    if (count === 0) {
+      showToast('No hay códigos activos o disponibles en el filtro actual para quemar.');
+      return;
+    }
+
+    const filtroTexto = prefixFilter.trim()
+      ? `con prefijo "${prefixFilter.trim().toUpperCase()}"`
+      : 'del filtro actual';
+
     setConfirmDialog({
-      message: `¿Marcar como CANJEADOS los ${selectedIds.size} códigos seleccionados? Ya no podrán usarse.`,
+      message: `¿Estás seguro de QUEMAR EN COMBO los ${count} códigos activos ${filtroTexto}? Esta acción actualizará su estado a canjeado en Firestore y no podrán volver a usarse.`,
       onConfirm: async () => {
         try {
-          const batch = writeBatch(db);
+          const ids = activeFilteredCodes.map((c) => c.id);
           const ahora = new Date().toLocaleString();
 
-          selectedIds.forEach((id) => {
-            const docRef = doc(db, 'codigos', id);
-            batch.update(docRef, {
-              activo: false,
-              canjeado: true,
-              fecha_canje: ahora,
-            });
+          await batchUpdateInChunks(ids, {
+            activo: false,
+            canjeado: true,
+            apartado: false,
+            estado: 'canjeado',
+            fecha_canje: ahora,
           });
 
-          await batch.commit();
-          showToast(`¡${selectedIds.size} códigos marcados como canjeados con éxito!`);
+          showToast(`¡Se quemaron ${count} códigos exitosamente en Firestore!`);
+          await cargarCodigos();
+        } catch (err) {
+          console.error(err);
+          showToast('Error al quemar los códigos en combo.');
+        }
+      },
+    });
+  };
+
+  // Batch actions on selected checkboxes
+  const apartarSeleccionados = () => {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    setConfirmDialog({
+      message: `¿Marcar como APARTADOS los ${ids.length} códigos seleccionados?`,
+      onConfirm: async () => {
+        try {
+          const ahora = new Date().toLocaleString();
+          await batchUpdateInChunks(ids, {
+            apartado: true,
+            estado: 'apartado',
+            fecha_apartado: ahora,
+          });
+          showToast(`¡${ids.length} códigos marcados como apartados con éxito!`);
+          setSelectedIds(new Set());
+          await cargarCodigos();
+        } catch (err) {
+          console.error(err);
+          showToast('Error al apartar los códigos seleccionados.');
+        }
+      },
+    });
+  };
+
+  const quemarSeleccionados = () => {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    setConfirmDialog({
+      message: `¿Marcar como CANJEADOS / QUEMADOS los ${ids.length} códigos seleccionados? Ya no podrán usarse.`,
+      onConfirm: async () => {
+        try {
+          const ahora = new Date().toLocaleString();
+          await batchUpdateInChunks(ids, {
+            activo: false,
+            canjeado: true,
+            apartado: false,
+            estado: 'canjeado',
+            fecha_canje: ahora,
+          });
+
+          showToast(`¡${ids.length} códigos marcados como canjeados con éxito!`);
           setSelectedIds(new Set());
           await cargarCodigos();
         } catch (err) {
@@ -320,18 +481,13 @@ export default function App() {
 
   const borrarSeleccionados = () => {
     if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
     setConfirmDialog({
-      message: `¿Eliminar PERMANENTEMENTE los ${selectedIds.size} códigos seleccionados de Firestore? Esta acción no se puede deshacer.`,
+      message: `¿Eliminar PERMANENTEMENTE los ${ids.length} códigos seleccionados de Firestore? Esta acción no se puede deshacer.`,
       onConfirm: async () => {
         try {
-          const batch = writeBatch(db);
-          selectedIds.forEach((id) => {
-            const docRef = doc(db, 'codigos', id);
-            batch.delete(docRef);
-          });
-
-          await batch.commit();
-          showToast(`¡${selectedIds.size} códigos eliminados de la base de datos!`);
+          await batchDeleteInChunks(ids);
+          showToast(`¡${ids.length} códigos eliminados de la base de datos!`);
           setSelectedIds(new Set());
           await cargarCodigos();
         } catch (err) {
@@ -350,7 +506,17 @@ export default function App() {
     const data = codes.map((c) => ({
       Código: c.id,
       Lote: c.lote || (c.tipo === 'universal' ? 'UNIVERSAL' : '-'),
+      Estado:
+        c.multiuso || c.tipo === 'universal'
+          ? 'Universal'
+          : c.canjeado || c.activo === false
+          ? 'Canjeado'
+          : c.apartado || c.estado === 'apartado'
+          ? 'Apartado'
+          : 'Disponible',
       'Fecha Creación': c.creado ? new Date(c.creado).toLocaleDateString() : '-',
+      'Fecha Canje': c.fecha_canje || '-',
+      'Fecha Apartado': c.fecha_apartado || '-',
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
@@ -380,8 +546,10 @@ export default function App() {
       {confirmDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-md bg-[#0b1626] border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
-            <div className="text-xl">⚠️ Confirmación</div>
-            <p className="text-sm text-slate-300">{confirmDialog.message}</p>
+            <div className="text-xl font-bold text-white flex items-center gap-2">
+              <span>⚠️</span> Confirmación
+            </div>
+            <p className="text-sm text-slate-300 leading-relaxed">{confirmDialog.message}</p>
             <div className="flex justify-end gap-3 pt-3">
               <button
                 type="button"
@@ -479,16 +647,16 @@ export default function App() {
                 </span>
               </h1>
               <p className="text-xs text-slate-300 mt-1">
-                Generación masiva, códigos universales permanentes y exportación limpia.
+                Generación masiva, códigos universales permanentes, estados en tiempo real y quemado en combo.
               </p>
             </div>
           </header>
 
-          {/* Métricas Rápidas */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Métricas Rápidas (5 cards incluyendo "Apartados") */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
             <div className="bg-[#0b1626] border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Total Códigos</p>
+                <p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Total</p>
                 <p id="stat-total" className="text-2xl font-black text-white mt-1">
                   {metrics.total}
                 </p>
@@ -503,6 +671,15 @@ export default function App() {
                 </p>
               </div>
               <div className="text-2xl">🟢</div>
+            </div>
+            <div className="bg-[#0b1626] border border-orange-500/30 rounded-2xl p-4 flex items-center justify-between bg-orange-950/10">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-orange-400 font-bold">Apartados</p>
+                <p id="stat-apartados" className="text-2xl font-black text-orange-300 mt-1">
+                  {metrics.apartados}
+                </p>
+              </div>
+              <div className="text-2xl">⏳</div>
             </div>
             <div className="bg-[#0b1626] border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
               <div>
@@ -616,42 +793,93 @@ export default function App() {
             </div>
           </div>
 
-          {/* Tabla y Controles de Búsqueda */}
+          {/* Tabla y Controles de Búsqueda y Quemado en Combo */}
           <div className="bg-[#0b1626] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-purple-400">
-                Listado de Códigos
-              </h2>
-              <div className="flex items-center gap-2 w-full md:w-auto">
-                <input
-                  type="text"
-                  id="input-search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Buscar código..."
-                  className="px-3 py-1.5 bg-[#070f1b] border border-slate-700 focus:border-purple-400 rounded-xl text-xs text-white focus:outline-none w-full md:w-56"
-                />
-                <select
-                  id="select-filter"
-                  value={filter}
-                  onChange={(e) =>
-                    setFilter(e.target.value as 'todos' | 'disponibles' | 'canjeados' | 'universales')
-                  }
-                  className="px-3 py-1.5 bg-[#070f1b] border border-slate-700 focus:border-purple-400 rounded-xl text-xs text-white focus:outline-none"
-                >
-                  <option value="todos">Todos</option>
-                  <option value="disponibles">Disponibles</option>
-                  <option value="canjeados">Canjeados</option>
-                  <option value="universales">Universales</option>
-                </select>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2">
+                  <span>Listado de Códigos</span>
+                  <span className="text-xs normal-case text-slate-400 font-normal">
+                    ({filteredCodes.length} mostrados)
+                  </span>
+                </h2>
+
+                {/* Botón de Acción Masiva: Quemar Códigos Filtrados por Prefijo / Filtro */}
                 <button
                   type="button"
-                  onClick={cargarCodigos}
-                  title="Recargar códigos"
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs rounded-xl text-purple-300 cursor-pointer"
+                  onClick={quemarFiltradosEnCombo}
+                  disabled={activeFilteredCodes.length === 0}
+                  className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs uppercase transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                  title="Quema todos los códigos activos que coinciden con los filtros actuales"
                 >
-                  🔄
+                  <span>🔥 Quemar códigos filtrados</span>
+                  <span className="bg-black/30 px-2 py-0.5 rounded-full text-[10px] font-mono">
+                    {activeFilteredCodes.length}
+                  </span>
                 </button>
+              </div>
+
+              {/* Filtros: Búsqueda, Filtro por Prefijo, Estado y Recarga */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                <div>
+                  <input
+                    type="text"
+                    id="input-search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Buscar código..."
+                    className="w-full px-3 py-2 bg-[#070f1b] border border-slate-700 focus:border-purple-400 rounded-xl text-xs text-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <input
+                    type="text"
+                    id="input-prefix-filter"
+                    value={prefixFilter}
+                    onChange={(e) => setPrefixFilter(e.target.value.toUpperCase())}
+                    placeholder="Filtro por prefijo (ej. BMC)..."
+                    className="w-full px-3 py-2 bg-[#070f1b] border border-amber-500/40 focus:border-amber-400 rounded-xl text-xs text-amber-300 uppercase font-mono focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <select
+                    id="select-filter"
+                    value={filter}
+                    onChange={(e) =>
+                      setFilter(
+                        e.target.value as 'todos' | 'disponibles' | 'apartados' | 'canjeados' | 'universales'
+                      )
+                    }
+                    className="w-full px-3 py-2 bg-[#070f1b] border border-slate-700 focus:border-purple-400 rounded-xl text-xs text-white focus:outline-none"
+                  >
+                    <option value="todos">Todos los estados</option>
+                    <option value="disponibles">🟢 Disponibles</option>
+                    <option value="apartados">⏳ Apartados</option>
+                    <option value="canjeados">🔥 Canjeados</option>
+                    <option value="universales">🌟 Universales</option>
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  {prefixFilter && (
+                    <button
+                      type="button"
+                      onClick={() => setPrefixFilter('')}
+                      className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs rounded-xl text-slate-300 cursor-pointer"
+                      title="Limpiar filtro de prefijo"
+                    >
+                      Limpiar
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={cargarCodigos}
+                    title="Recargar códigos desde Firestore"
+                    className="flex-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs rounded-xl text-purple-300 font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>🔄</span>
+                    <span>Recargar</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -690,13 +918,15 @@ export default function App() {
                   ) : filteredCodes.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="p-6 text-center text-slate-400">
-                        No se encontraron registros.
+                        No se encontraron registros con los filtros actuales.
                       </td>
                     </tr>
                   ) : (
                     filteredCodes.map((c) => {
                       const esUniversal = c.multiuso === true || c.tipo === 'universal';
                       const estaUsado = (c.canjeado === true || c.activo === false) && !esUniversal;
+                      const esApartado =
+                        !estaUsado && !esUniversal && (c.apartado === true || c.estado === 'apartado');
                       const fecha = c.creado ? new Date(c.creado).toLocaleDateString() : '-';
                       const isChecked = selectedIds.has(c.id);
 
@@ -705,7 +935,9 @@ export default function App() {
                           key={c.id}
                           className={`hover:bg-slate-900/40 transition-colors ${
                             isChecked ? 'bg-purple-950/20' : ''
-                          } ${estaUsado ? 'opacity-70 bg-slate-950/30' : ''}`}
+                          } ${estaUsado ? 'opacity-70 bg-slate-950/30' : ''} ${
+                            esApartado ? 'bg-orange-950/10' : ''
+                          }`}
                         >
                           <td className="p-3 text-center">
                             <input
@@ -717,7 +949,11 @@ export default function App() {
                           </td>
                           <td
                             className={`p-3 font-mono font-bold ${
-                              esUniversal ? 'text-amber-300' : 'text-purple-300'
+                              esUniversal
+                                ? 'text-amber-300'
+                                : esApartado
+                                ? 'text-orange-300'
+                                : 'text-purple-300'
                             } flex items-center gap-2`}
                           >
                             <span>{c.id}</span>
@@ -735,31 +971,63 @@ export default function App() {
                               <span className="px-2.5 py-0.5 bg-amber-950/70 text-amber-300 border border-amber-500/50 rounded-md font-bold flex items-center gap-1 w-max">
                                 🌟 Universal
                               </span>
-                            ) : !estaUsado ? (
-                              <span className="px-2.5 py-0.5 bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 rounded-md font-bold w-max">
-                                Disponible
-                              </span>
-                            ) : (
+                            ) : estaUsado ? (
                               <span className="px-2.5 py-0.5 bg-purple-950/70 text-purple-300 border border-purple-800/50 rounded-md font-bold w-max">
                                 Canjeado
+                              </span>
+                            ) : esApartado ? (
+                              <span className="px-2.5 py-0.5 bg-orange-950/70 text-orange-400 border border-orange-500/50 rounded-md font-bold flex items-center gap-1 w-max">
+                                ⏳ Apartado
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-0.5 bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 rounded-md font-bold w-max">
+                                Disponible
                               </span>
                             )}
                           </td>
                           <td className="p-3 text-slate-400">{fecha}</td>
-                          <td className="p-3 text-right space-x-2">
+                          <td className="p-3 text-right space-x-1.5 sm:space-x-2">
+                            {/* Botón Apartar / Liberar */}
+                            {!estaUsado && !esUniversal && !esApartado && (
+                              <button
+                                type="button"
+                                onClick={() => apartarCodigo(c.id)}
+                                title="Apartar código para un cliente"
+                                className="px-2 py-1 bg-orange-600/20 hover:bg-orange-600 text-orange-400 hover:text-white border border-orange-500/30 rounded-lg text-xs transition-all cursor-pointer font-medium"
+                              >
+                                ⏳ Apartar
+                              </button>
+                            )}
+
+                            {!estaUsado && !esUniversal && esApartado && (
+                              <button
+                                type="button"
+                                onClick={() => liberarCodigo(c.id)}
+                                title="Regresar a estado disponible"
+                                className="px-2 py-1 bg-slate-700/60 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600/40 rounded-lg text-xs transition-all cursor-pointer font-medium"
+                              >
+                                ↩️ Liberar
+                              </button>
+                            )}
+
+                            {/* Botón Quemar */}
                             {!estaUsado && !esUniversal && (
                               <button
                                 type="button"
                                 onClick={() => quemarCodigo(c.id)}
-                                className="px-2 py-1 bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-500/30 rounded-lg text-xs transition-all cursor-pointer"
+                                title="Marcar como canjeado"
+                                className="px-2 py-1 bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-500/30 rounded-lg text-xs transition-all cursor-pointer font-medium"
                               >
                                 🔥 Quemar
                               </button>
                             )}
+
+                            {/* Botón Borrar */}
                             <button
                               type="button"
                               onClick={() => borrarCodigo(c.id)}
-                              className="px-2 py-1 bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 rounded-lg text-xs transition-all cursor-pointer"
+                              title="Eliminar de Firestore"
+                              className="px-2 py-1 bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 rounded-lg text-xs transition-all cursor-pointer font-medium"
                             >
                               🗑️ Borrar
                             </button>
@@ -779,12 +1047,19 @@ export default function App() {
       {selectedIds.size > 0 && isAuthenticated && (
         <div
           id="batch-bar"
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-[#0b1626]/95 border-2 border-purple-500/80 backdrop-blur-md px-6 py-3.5 rounded-2xl shadow-2xl flex items-center gap-4"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-[#0b1626]/95 border-2 border-purple-500/80 backdrop-blur-md px-6 py-3.5 rounded-2xl shadow-2xl flex flex-wrap items-center justify-center gap-3"
         >
           <span className="text-xs text-purple-300 font-bold">
             <span id="batch-count">{selectedIds.size}</span> seleccionados
           </span>
-          <div className="h-4 w-px bg-slate-700"></div>
+          <div className="h-4 w-px bg-slate-700 hidden sm:block"></div>
+          <button
+            type="button"
+            onClick={apartarSeleccionados}
+            className="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+          >
+            ⏳ Apartar Seleccionados
+          </button>
           <button
             type="button"
             onClick={quemarSeleccionados}
@@ -803,6 +1078,7 @@ export default function App() {
             type="button"
             onClick={deseleccionarTodo}
             className="text-xs text-slate-400 hover:text-white ml-1 cursor-pointer"
+            title="Deseleccionar todos"
           >
             ✕
           </button>
